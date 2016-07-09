@@ -14,14 +14,65 @@ import re
 import string
 from keras.preprocessing.text import text_to_word_sequence, base_filter
 from keras.preprocessing.sequence import pad_sequences
-
+from random import seed, uniform
+from sys import stdout
 
 tokenizing_errors = 0
 
+def build_glove_dictionary():
+    """
+        builds a dictionary based on the glove model.
+        http://nlp.stanford.edu/projects/glove/
+        dictionary will have the form of key = token, value = numpy array with the pretrained values
 
-def read_json_file():
+        REALLY IMPORTANT the glove dataset. with the big one finds nearly everything....
+        smallest one...quite baaaaaad...
+    """
+    print ('building glove dictionary...')
+    glove_file = '../TBIR/glove.840B.300d.txt'
+    glove_dict = {}
+    with open(glove_file) as fd_glove:
+        for i, input in enumerate(fd_glove):
+            stdout.write("\rloading glove dictionary: %d" % i)
+            stdout.flush()
+            input_split = input.split(" ")
+            #print input_split
+            key = input_split[0] #get key
+            del input_split[0]  # remove key
+            values = []
+            for value in input_split:
+                values.append(float(value))
+            np_values = np.asarray(values)
+            glove_dict[key] = np_values
 
-    file_to_read = 'snli_1.0/snli_1.0_dev.jsonl'
+    #print 'dictionary build with length', len(glove_dict)
+    print ""
+    return glove_dict
+
+
+
+
+def return_sparse_vector(sentence, vocab_size):
+    """
+        @params:
+        sentence: array with the encoded sentence [1 534 232 ... 3 ...0]
+        returns len(sentence) np.arrays with 1 hot encoded vectors
+    """
+    sparse_vector = []
+    for item in sentence:
+        one_hot_vector = np.zeros(vocab_size)
+        one_hot_vector[item] = 1
+        sparse_vector.append(one_hot_vector)
+
+    return np.asarray(sparse_vector)
+
+
+def read_json_file(train=False):
+
+    if train:
+        file_to_read = 'snli_1.0/snli_1.0_train.jsonl'
+    else:
+        file_to_read = 'snli_1.0/snli_1.0_test.jsonl'
 
     try:
         #read whole file into python array
@@ -55,10 +106,55 @@ def read_json_file():
         del data_df['sentence1_parse']
         del data_df['sentence2_binary_parse']
         del data_df['sentence2_parse']
-        print data_df.head(3)
-        print data_df.tail(3)
 
-        return data_df
+        list_pre = data_df['sentence1'].tolist()
+        list_hip = data_df['sentence2'].tolist()
+
+        tokenized_pre = [sentence.split(" ") for sentence in list_pre]
+        tokenized_hip = [sentence.split(" ") for sentence in list_hip]
+        avg = 0
+        more_40 = 0
+        for sent in tokenized_hip:
+            avg += len(sent)
+            if len(sent)>25:
+                more_40+=1
+        print 'hip'
+        print avg/len(tokenized_hip)
+        print more_40
+        print 'pre'
+        avg = 0
+        more_40 = 0
+        for sent in tokenized_pre:
+            avg += len(sent)
+            if len(sent)>25:
+                more_40+=1
+        print avg/len(tokenized_pre)
+        print more_40
+
+        maxlen_premises = len(max(tokenized_pre, key=len))
+        maxlen_hypothesis = len(max(tokenized_hip, key=len))
+
+        print maxlen_premises, maxlen_hypothesis
+        print max(tokenized_pre, key=len)
+        print max(tokenized_hip, key=len)
+
+        list_of_sentences1 = data_df['annotator_labels'].tolist()
+
+        counter_1 = 0
+        counter_2 = 0
+        counter_3 = 0
+
+        for dp in list_of_sentences1:
+            if len(set(dp)) is 1:
+                counter_1 +=1
+            if len(set(dp)) is 2:
+                counter_2 +=1
+            if len(set(dp)) is 3:
+                counter_3 +=1
+
+        print counter_1, counter_2, counter_3
+        #raise SystemExit(0)
+        return data_df, maxlen_premises, maxlen_hypothesis
     except IOError as e:
         print e
 
@@ -101,7 +197,7 @@ def create_vectorized_sentence(sentence, word2idx):
     return np.asarray(vectorized_sentence)
 
 
-def pad_sentence(sentence, max_len=30, pad_with=0):
+def pad_sentence(sentence, max_len=35, pad_with=0):
         '''
             @pads a single sentence
             @if sentence is below max_len, returns a sentence(vectorized) of max_len with 0s on the right
@@ -122,8 +218,10 @@ def pad_sentence(sentence, max_len=30, pad_with=0):
         return padded_sentence
 
 
-def create_sentence_ds(sentences_df, word2idx, maxlen=35):
+def create_sentence_ds(sentences_df, word2idx, cut_ds,  maxlen=35,):
     # create pair [[s1,s2], label]
+    seed = 1337 #great seed
+
     data_set = []
     print('Generating dataset')
     list_premises = sentences_df['sentence1'].tolist()
@@ -131,15 +229,17 @@ def create_sentence_ds(sentences_df, word2idx, maxlen=35):
     list_label = sentences_df['gold_label'].tolist()
 
     for premise, hypothesis, label_text in zip(list_premises, list_hypothesis, list_label):
-            label_no_unicode = make_unicode(label_text)
-            numpy_label = label_output_data(label_no_unicode)
-            premise_encoded = create_vectorized_sentence(premise, word2idx)
-            hypothesis_encoded = create_vectorized_sentence(hypothesis, word2idx)
-            padded_premise = pad_sentence(premise_encoded, max_len=maxlen)
-            padded_hypothesis = pad_sentence(hypothesis_encoded, max_len=maxlen)
-            #print numpy_label
-            #([pre-hypo],[encoded pre-hypo],[100]output) first pair of values is unnecesary right now 27/02, just for debug purpouses
-            data_set.append([[premise, hypothesis], [padded_premise, padded_hypothesis], numpy_label])
+            num = uniform(1.0, 0.0)
+            if num < cut_ds:
+                label_no_unicode = make_unicode(label_text)
+                numpy_label = label_output_data(label_no_unicode)
+                premise_encoded = create_vectorized_sentence(premise, word2idx)
+                hypothesis_encoded = create_vectorized_sentence(hypothesis, word2idx)
+                padded_premise = pad_sentence(premise_encoded, max_len=maxlen)
+                padded_hypothesis = pad_sentence(hypothesis_encoded, max_len=maxlen)
+                #print numpy_label
+                #([pre-hypo],[encoded pre-hypo],[100]output) first pair of values is unnecesary right now 27/02, just for debug purpouses
+                data_set.append([[premise, hypothesis], [padded_premise, padded_hypothesis], numpy_label])
 
     return data_set
 
