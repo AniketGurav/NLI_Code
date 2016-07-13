@@ -19,7 +19,7 @@ from sys import stdout
 
 tokenizing_errors = 0
 
-def build_glove_dictionary():
+def build_glove_dictionary(vocabulary):
     """
         builds a dictionary based on the glove model.
         http://nlp.stanford.edu/projects/glove/
@@ -32,21 +32,26 @@ def build_glove_dictionary():
     glove_file = '../TBIR/glove.840B.300d.txt'
     glove_dict = {}
     with open(glove_file) as fd_glove:
+        j=0
         for i, input in enumerate(fd_glove):
-            stdout.write("\rloading glove dictionary: %d" % i)
-            stdout.flush()
             input_split = input.split(" ")
             #print input_split
             key = input_split[0] #get key
             del input_split[0]  # remove key
-            values = []
-            for value in input_split:
-                values.append(float(value))
-            np_values = np.asarray(values)
-            glove_dict[key] = np_values
-
-    #print 'dictionary build with length', len(glove_dict)
+            if key in vocabulary:
+                j+=1
+                stdout.write("\rloading glove dictionary: %d" % j)
+                stdout.flush()
+                values = []
+                for value in input_split:
+                    values.append(float(value))
+                np_values = np.asarray(values)
+                glove_dict[key] = np_values
+            #else:
+                #print key
     print ""
+    print 'dictionary build with length', len(glove_dict)
+
     return glove_dict
 
 
@@ -112,6 +117,7 @@ def read_json_file(train=False):
 
         tokenized_pre = [sentence.split(" ") for sentence in list_pre]
         tokenized_hip = [sentence.split(" ") for sentence in list_hip]
+
         avg = 0
         more_40 = 0
         for sent in tokenized_hip:
@@ -134,7 +140,7 @@ def read_json_file(train=False):
         maxlen_premises = len(max(tokenized_pre, key=len))
         maxlen_hypothesis = len(max(tokenized_hip, key=len))
 
-        print maxlen_premises, maxlen_hypothesis
+        #print maxlen_premises, maxlen_hypothesis
         print max(tokenized_pre, key=len)
         print max(tokenized_hip, key=len)
 
@@ -271,13 +277,18 @@ def give_vocabulary(sentences_df):
         list_sentence_word_tmp += text_to_word_sequence(sentence_unicode2.encode('ascii'), filters=base_filter(), lower=True, split=" ")
 
     set_words = set(list_sentence_word_tmp)
-    word2idx = {}
-    for i, word in enumerate(set_words):
-        word2idx[word] = int(i)
-
     #print word2idx
     print "length of vocabulary: %d"%len(set_words)
-    return set_words, len(set_words), word2idx
+    return set_words
+
+def get_word_idx_vocab(vocab):
+    word2idx = {}
+    for i, word in enumerate(vocab):
+        #if "blond" in word:
+        #    print vocab[i], vocab[i+1]
+        word2idx[word] = int(i)
+    word2idx["unk0"] = len(word2idx)
+    return word2idx
 
 # simple test of extracting a json file and showing the len of the vocabulary
 def test():

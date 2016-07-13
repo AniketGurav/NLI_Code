@@ -9,7 +9,7 @@ http://nlp.stanford.edu/pubs/snli_paper.pdf
 
 from keras.layers import recurrent
 from keras.models import Sequential, slice_X
-from keras.layers.core import Activation, TimeDistributedDense, RepeatVector, Merge, Dense, Dropout, Flatten
+from keras.layers.core import Activation, TimeDistributedDense, RepeatVector, Merge, Dense, Dropout, Flatten, Reshape
 from keras.regularizers import l2, activity_l2
 from keras.optimizers import SGD
 from keras.layers.embeddings import Embedding
@@ -19,13 +19,14 @@ import numpy as np
 import glove
 from extract_sentences import return_sparse_vector
 
+
 class paper_model():
     #parameters
-    def __init__(self, number_stacked_layers=3, vocabulary_size=300, is_tbir=False):
+    def __init__(self, number_stacked_layers=3, dimensions_emb=300, is_tbir=False):
         self.RNN = recurrent.LSTM
         self.stacked_layers = number_stacked_layers
-        self.vocab_size = vocabulary_size #dimensions of embeddings
-        self.weights_path = "./weights.hdf5"
+        self.dimensions_emb = dimensions_emb #dimensions of embeddings
+        self.weights_path = "./weights_maxlen.hdf5"
         self.nli_model = ''
         if is_tbir:
             self.filename_output = 'predictions_tbir.txt'
@@ -79,8 +80,9 @@ class paper_model():
         return np.asarray(premises_encoded), np.asarray(hypothesis_encoded), expected_output, id_query, id_premises
 
 
-    def build_model(self, LOAD_W=True,  max_pre=45, max_hypo=45):
-            #DROPOUT TO INPUT AND OUTPUTS OF THE SENTENCE EMBEDDINGS!!
+    def build_model(self, emb_init,  n_symbols, LOAD_W=True, max_pre=45, max_hypo=45):
+                   #DROPOUT TO INPUT AND OUTPUTS OF THE SENTENCE EMBEDDINGS!!
+
         print('Build embeddings model...')
         #check this maxlen
         maxlen = 45
@@ -88,12 +90,14 @@ class paper_model():
         premise_model = Sequential()
         hypothesis_model = Sequential()
         # 2 embedding layers 1 per premise 1 per hypothesis
-        #hypothesis_model.add(Embedding(input_dim=self.vocab_size, output_dim=self.vocab_size, input_length=maxlen))
-        premise_model.add(self.RNN(100, init='normal', activation='tanh', input_shape=(max_pre, self.vocab_size)))
+        premise_model.add(Embedding(output_dim=300, input_dim=n_symbols + 1, mask_zero=True, weights=[emb_init]))
+        premise_model.add(Dropout(0.1))
+        premise_model.add(self.RNN(100, return_sequences=False))
 
 
-        #hypothesis_model.add(Embedding(input_dim=self.vocab_size, output_dim=self.vocab_size, input_length=maxlen))
-        hypothesis_model.add(self.RNN(100, init='normal', activation='tanh', input_shape=(max_hypo,self.vocab_size)))
+        hypothesis_model.add(Embedding(output_dim=300, input_dim=n_symbols + 1, mask_zero=True, weights=[emb_init]))
+        premise_model.add(Dropout(0.1))
+        hypothesis_model.add(self.RNN(100, return_sequences=False))
 
 
         print('Concat premise + hypothesis...')
@@ -102,7 +106,7 @@ class paper_model():
 
         for i in range(1, self.stacked_layers):
             print ('stacking %d layer')%i
-            self.nli_model.add(Dense(input_dim=100, output_dim=200, init='normal', activation='tanh'))
+            self.nli_model.add(Dense(input_dim=200, output_dim=200, init='normal', activation='tanh'))
 
         print ('stacking last layer')
         self.nli_model.add(Dense(input_dim=200, output_dim=3, init='normal', activation='tanh'))
@@ -200,4 +204,13 @@ class paper_model():
                 f.write(sup)
                 f.write('\n')
             f.close()
-            print 'Predictions correct ', correct,'out of',len(predictions), 'acc(%): ',float(correct)/float(len(predictions))
+            perc = float(correct)/float(len(predictions))
+            print 'Predictions correct ', correct,'out of',len(predictions), 'acc(%): ', perc
+            #print out
+            #add graph of the test set learning.
+            """
+            f = open('test_accuracy', 'a')
+            perc = str(perc + '\n')
+            f.write(out)
+            f.close()
+            """

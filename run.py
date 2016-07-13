@@ -1,14 +1,15 @@
 __author__ = 'david_torrejon'
 
 
-from extract_sentences import give_vocabulary, read_json_file, create_sentence_ds, build_glove_dictionary
+from extract_sentences import give_vocabulary, read_json_file, create_sentence_ds, build_glove_dictionary, get_word_idx_vocab, make_unicode
 from model_simple_rnn import paper_model
 from shuffle_data import get_test_train_sets
-from embeddings import create_embeddings
+from embeddings import create_embeddings, create_embedding_sentence
 from tbir_project_data import load_data
 import numpy as np
 from sys import stdout
-
+import re
+import string
 
 #split parameters for dev set
 percentage_split_ds = 0.80
@@ -33,27 +34,45 @@ is_tbir_test = False
 # feed model with premise, hypothesis
 
 #create class model
-glove_dict = build_glove_dictionary()
+
 snli_model = paper_model(3, is_tbir=is_tbir_test)#stacked layers
 #create MODEL ADD TYPE OF MODEL RNN OR LSTM build(model='type') word2idx might not be needed in the model anymore
 # for X_train, Y_train in MiniBatchGenerator(): instead of building the embeddings i could build small chunks of 1k sentences!
 
 if train_model:
     df_data, max_pre, max_hypo = read_json_file(train=True)
-    if max_pre > max_hypo:
-        maxlen = max_pre
-    else:
-        maxlen = max_hypo
+    vocabulary = give_vocabulary(df_data)
     test_file, max_pre_t, max_hypo_t  = read_json_file(train=False)
-    snli_model.build_model(LOAD_W=LOAD_W, max_pre = max_pre, max_hypo = max_hypo)
+    vocabulary_t = give_vocabulary(test_file)
+    vocab = vocabulary.union(vocabulary_t)
+
+    print "length train/test vocab", len(vocab)
+    word2idx = get_word_idx_vocab(list(vocab))
+    glove_dict = build_glove_dictionary(vocab)
+
+
+    """
+    check unknowns
+    """
+    unk_vector = .1 * np.random.random_sample((300,)) - 0.05
+    print unk_vector.shape
+    #print unk_vector
+    n_symbols = len(word2idx) + 1 # adding 1 to account for 0th index (for masking)
+    embedding_weights = np.zeros((n_symbols+1,300))
+    for word,index in word2idx.items():
+        embedding_weights[index,:] = create_embedding_sentence(word, glove_dict, unk_vector, maxlen=1, onehot=False, word2idx=word2idx)
+
+
+    snli_model.build_model(LOAD_W=LOAD_W, max_pre = max_pre, max_hypo = max_hypo, emb_init = embedding_weights, n_symbols=n_symbols)
     print len(df_data)
-    for epoch in range(0,5):
+    for epoch in range(0,30):
         print("epoch: %d" % epoch)
         print '-'*10
         for batch_range in range(0,len(df_data),cut_ds):
             print("batch range %s" % batch_range)
             print '-'*15
-            data_train = create_embeddings(df_data, glove_dict, batch_range, cut_ds,  max_pre = max_pre, max_hypo = max_hypo)
+            data_train = create_embeddings(df_data, glove_dict, batch_range, cut_ds,  max_pre = max_pre, max_hypo = max_hypo, unk_vector=unk_vector, onehot=True, word2idx=word2idx)
+
             snli_model.train_model(data_train)
         '''
         After each training, test and check with the test set.
@@ -67,7 +86,7 @@ if train_model:
         #snli_model.build_model(LOAD_W=LOAD_W, max_pre = max_pre, max_hypo = max_hypo)
         for batch_test in range(0, len(test_file), test_batch):
             print("batch range %s" % batch_test)
-            data_test = create_embeddings(test_file[batch_test:batch_test+test_batch], glove_dict, batch_test, cut_ds, test_tbir=is_tbir_test, max_pre = max_pre, max_hypo = max_hypo)
+            data_test = create_embeddings(test_file[batch_test:batch_test+test_batch], glove_dict, batch_test, cut_ds, test_tbir=is_tbir_test, max_pre = max_pre, max_hypo = max_hypo, onehot=True, word2idx=word2idx)
             snli_model.test_model(data_test, is_tbir=is_tbir_test)
     del df_data
 
