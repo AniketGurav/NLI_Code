@@ -65,7 +65,7 @@ if train_model:
 
     snli_model.build_model(LOAD_W=LOAD_W, max_pre = max_pre, max_hypo = max_hypo, emb_init = embedding_weights, n_symbols=n_symbols)
     print len(df_data)
-    for epoch in range(0,30):
+    for epoch in range(0,50):
         print("epoch: %d" % epoch)
         print '-'*10
         for batch_range in range(0,len(df_data),cut_ds):
@@ -83,13 +83,12 @@ if train_model:
 
         #print len(test_file)
         test_batch = 10000
-        #snli_model.build_model(LOAD_W=LOAD_W, max_pre = max_pre, max_hypo = max_hypo)
+            #snli_model.build_model(LOAD_W=LOAD_W, max_pre = max_pre, max_hypo = max_hypo)
         for batch_test in range(0, len(test_file), test_batch):
             print("batch range %s" % batch_test)
-            data_test = create_embeddings(test_file[batch_test:batch_test+test_batch], glove_dict, batch_test, cut_ds, test_tbir=is_tbir_test, max_pre = max_pre, max_hypo = max_hypo, onehot=True, word2idx=word2idx)
+            data_test = create_embeddings(test_file[batch_test:batch_test+test_batch], glove_dict, batch_test, cut_ds,max_pre = max_pre, max_hypo = max_hypo, unk_vector=unk_vector, onehot=True, word2idx=word2idx)
             snli_model.test_model(data_test, is_tbir=is_tbir_test)
     del df_data
-
 
 
 #snli_model.test_model(data_test)
