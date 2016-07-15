@@ -93,12 +93,12 @@ class paper_model():
         premise_model.add(Embedding(output_dim=300, input_dim=n_symbols + 1, mask_zero=True, weights=[emb_init]))
         premise_model.add(Dropout(0.1))
         premise_model.add(self.RNN(100, return_sequences=False))
-
+        premise_model.add(Dropout(0.1))
 
         hypothesis_model.add(Embedding(output_dim=300, input_dim=n_symbols + 1, mask_zero=True, weights=[emb_init]))
         premise_model.add(Dropout(0.1))
         hypothesis_model.add(self.RNN(100, return_sequences=False))
-
+        premise_model.add(Dropout(0.1))
 
         print('Concat premise + hypothesis...')
         self.nli_model = Sequential()
@@ -106,13 +106,13 @@ class paper_model():
 
         for i in range(1, self.stacked_layers):
             print ('stacking %d layer')%i
-            self.nli_model.add(Dense(input_dim=200, output_dim=200, init='normal', activation='tanh'))
+            self.nli_model.add(Dense(input_dim=200, output_dim=200, init='normal', activation='tanh', W_regularizer=l2(0.01)))
 
         print ('stacking last layer')
-        self.nli_model.add(Dense(input_dim=200, output_dim=3, init='normal', activation='tanh'))
+        self.nli_model.add(Dense(input_dim=200, output_dim=3, init='normal', activation='tanh', W_regularizer=l2(0.01)))
         print ('Softmax layer...')
         # 3 way softmax (entail, neutral, contradiction)
-        self.nli_model.add(Dense(3, init='uniform'))
+        self.nli_model.add(Dense(3, init='uniform', W_regularizer=l2(0.01)))
         self.nli_model.add(Activation('softmax')) # care! 3way softmax!
 
         print('Compiling model...')
