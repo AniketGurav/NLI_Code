@@ -14,6 +14,7 @@ from keras.regularizers import l2, activity_l2
 from keras.optimizers import SGD
 from keras.layers.embeddings import Embedding
 from keras.preprocessing.text import Tokenizer, one_hot, base_filter
+from keras import backend as K
 
 import numpy as np
 import glove
@@ -26,8 +27,9 @@ class paper_model():
         self.RNN = recurrent.LSTM
         self.stacked_layers = number_stacked_layers
         self.dimensions_emb = dimensions_emb #dimensions of embeddings
-        self.weights_path = "./weights_maxlen.hdf5"
+        self.weights_path = "./weights.hdf5" #weights_maxlen
         self.nli_model = ''
+
         if is_tbir:
             self.filename_output = 'predictions_tbir.txt'
             open(self.filename_output, 'w')
@@ -52,6 +54,16 @@ class paper_model():
     and outputs of the sentence embedding models (though not to its internal
     connections) with a fixed dropout rate. All models were implemented in a common framework for this paper.
     """
+    def file_len(self, fname):
+        i=0
+        try:
+            with open(fname) as f:
+                for i, l in enumerate(f):
+                    pass
+            return i + 1
+        except:
+            open(fname, "w")
+            return 0
 
     def data_preparation_nn(self, sentences, diferences=3):
         premises_encoded = []
@@ -92,39 +104,41 @@ class paper_model():
         # 2 embedding layers 1 per premise 1 per hypothesis
         premise_model.add(Embedding(output_dim=300, input_dim=n_symbols + 1, mask_zero=True, weights=[emb_init]))
         premise_model.add(Dropout(0.1))
-        premise_model.add(self.RNN(100, return_sequences=False))
+        premise_model.add(self.RNN(200, return_sequences=False)) #best perf is 300
         premise_model.add(Dropout(0.1))
 
         hypothesis_model.add(Embedding(output_dim=300, input_dim=n_symbols + 1, mask_zero=True, weights=[emb_init]))
         premise_model.add(Dropout(0.1))
-        hypothesis_model.add(self.RNN(100, return_sequences=False))
+        hypothesis_model.add(self.RNN(200, return_sequences=False)) #best perf is 300
         premise_model.add(Dropout(0.1))
 
         print('Concat premise + hypothesis...')
         self.nli_model = Sequential()
-        self.nli_model.add(Merge([premise_model, hypothesis_model], mode='concat', concat_axis=1))
-
-        for i in range(1, self.stacked_layers):
+        self.nli_model.add(Merge([premise_model, hypothesis_model], mode='mul', concat_axis=1))#concat irrelevant if mult
+        self.nli_model.add(Dense(input_dim=200, output_dim=200, init='normal', activation='tanh')) #input 600 output 200d
+        for i in range(1, self.stacked_layers-1):
             print ('stacking %d layer')%i
-            self.nli_model.add(Dense(input_dim=200, output_dim=200, init='normal', activation='tanh', W_regularizer=l2(0.01)))
+            self.nli_model.add(Dense(input_dim=200, output_dim=200, init='normal', activation='tanh')) #200d
 
         print ('stacking last layer')
-        self.nli_model.add(Dense(input_dim=200, output_dim=3, init='normal', activation='tanh', W_regularizer=l2(0.01)))
+        self.nli_model.add(Dense(input_dim=200, output_dim=2, init='normal', activation='tanh')) #200d
         print ('Softmax layer...')
         # 3 way softmax (entail, neutral, contradiction)
-        self.nli_model.add(Dense(3, init='uniform', W_regularizer=l2(0.01)))
+        self.nli_model.add(Dense(2, init='uniform'))
         self.nli_model.add(Activation('softmax')) # care! 3way softmax!
 
         print('Compiling model...')
         #sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9, nesterov=True)
         self.nli_model.compile(loss='categorical_crossentropy', optimizer='rmsprop')
         print('Model Compiled')
+        #print self.nli_model.summary()
         #print('generating sparse vectors(1hot encoding) from sentences...')
+
         if LOAD_W:
             print('loading weights...')
             self.nli_model.load_weights(self.weights_path)
 
-    def train_model(self, data_train):
+    def train_model(self, data_train, batch_range):
 
         #split data
         #data preparation
@@ -158,11 +172,19 @@ class paper_model():
         #raise SystemExit(0)
         # I dont want the conversion here, make the conversion somewhere else, for esthetic purpouses
         print('training....')
-        self.nli_model.fit(X, expected_output, batch_size=64, nb_epoch=1, verbose=1, sample_weight=None, show_accuracy=True)
+        history = self.nli_model.fit(X, expected_output, batch_size=64, nb_epoch=1, verbose=1, sample_weight=None, show_accuracy=True)
+        if batch_range == 540000:
+            lines = self.file_len("lossfile.txt")
+            loss_file = open("lossfile.txt", "a")
+            for loss in history.history['loss']:
+                lines+=1
+                loss_file.write("("+str(lines)+","+str(loss)+")\n")
+
+
         print('saving weights')
         self.nli_model.save_weights(self.weights_path, overwrite=True)
 
-    def test_model(self, data_test, is_tbir=False):
+    def test_model(self, data_test,  test_file, is_tbir=False):
 
         print ('testing....')
         if is_tbir is False:
@@ -178,14 +200,16 @@ class paper_model():
 
         X_t = [premises_encoded_t, hypothesis_encoded_t]
         #print X_t[0]
-        score = self.nli_model.evaluate(X_t, expected_output_t, batch_size=128, show_accuracy=True, verbose=1)
-        predictions = self.nli_model.predict(X_t, batch_size=128, verbose=1)
+        score = self.nli_model.evaluate(X_t, expected_output_t, batch_size=64, show_accuracy=True, verbose=1)
+        predictions = self.nli_model.predict(X_t, batch_size=64, verbose=1)
+
 
         """
         store results?
         """
         correct = 0
-        f = open(self.filename_output, 'a')
+        f = open(self.filename_output, 'w')
+        g = open("wrong_pairs.txt", "w")
         if is_tbir:
             for pred, e_out, id_query, idq in zip(predictions, expected_output_t, img_query_t, id_querys):
                 #print np.argmax(pred), np.argmax(e_out)
@@ -194,23 +218,25 @@ class paper_model():
                 sup = str(pred) + " " + str(e_out) + " " + str(id_query) + " " + str(idq)
                 f.write(sup)
                 f.write('\n')
-            f.close()
+
         else:
-            for pred, e_out in zip(predictions, expected_output_t):
+            list_premises = test_file['sentence1'].tolist()
+            list_hypothesis = test_file['sentence2'].tolist()
+            for pred, e_out, p, h in zip(predictions, expected_output_t, list_premises, list_hypothesis):
                 #print np.argmax(pred), np.argmax(e_out)
                 if np.argmax(pred) == np.argmax(e_out): #np arrays!
                     correct +=1
-                sup = str(pred) + " " + str(e_out)
-                f.write(sup)
-                f.write('\n')
-            f.close()
+                else:
+                    sup = str(pred) + " " + str(e_out)
+                    f.write(sup)
+                    f.write('\n')
+                    wrong = str(p) + "#" + str(h) + "\n"
+                    g.write(wrong)
+
+            g.close()
             perc = float(correct)/float(len(predictions))
             print 'Predictions correct ', correct,'out of',len(predictions), 'acc(%): ', perc
             #print out
             #add graph of the test set learning.
-            """
-            f = open('test_accuracy', 'a')
-            perc = str(perc + '\n')
-            f.write(out)
-            f.close()
-            """
+        f.close()
+        return perc

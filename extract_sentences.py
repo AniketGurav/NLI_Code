@@ -72,7 +72,7 @@ def return_sparse_vector(sentence, vocab_size):
     return np.asarray(sparse_vector)
 
 
-def read_json_file(train=False):
+def read_json_file(train=False, remove_neutral=False):
 
     if train:
         file_to_read = 'snli_1.0/snli_1.0_train.jsonl'
@@ -112,6 +112,9 @@ def read_json_file(train=False):
         del data_df['sentence2_binary_parse']
         del data_df['sentence2_parse']
 
+        if remove_neutral:
+            column_name = unicode('gold_label')
+            data_df = data_df[data_df[column_name] != "neutral"]
         list_pre = data_df['sentence1'].tolist()
         list_hip = data_df['sentence2'].tolist()
 
@@ -157,8 +160,9 @@ def read_json_file(train=False):
                 counter_2 +=1
             if len(set(dp)) is 3:
                 counter_3 +=1
-
+        total_counter = counter_1+counter_2+counter_3
         print counter_1, counter_2, counter_3
+        print counter_1/float(total_counter), counter_2/float(total_counter), counter_3/float(total_counter)
         #raise SystemExit(0)
         return data_df, maxlen_premises, maxlen_hypothesis
     except IOError as e:
@@ -174,10 +178,10 @@ def make_unicode(source_text):
     return no_unicode
 
 def label_output_data(label):
-    labels = {'neutral':np.array([0,1,0]),
-                'entailment':np.array([1,0,0]),
-                'contradiction':np.array([0,0,1]),
-                ' ': np.array([0,0,0])
+    labels = {#'neutral':np.array([0,1,0]),
+                'entailment':np.array([1,0]),
+                'contradiction':np.array([0,1]),
+                ' ': np.array([0,0])
                 }
     return labels[label]
 
@@ -286,7 +290,7 @@ def get_word_idx_vocab(vocab):
     for i, word in enumerate(vocab):
         #if "blond" in word:
         #    print vocab[i], vocab[i+1]
-        word2idx[word] = int(i)
+        word2idx[word] = int(i)+1
     word2idx["unk0"] = len(word2idx)
     return word2idx
 

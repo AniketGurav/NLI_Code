@@ -7,8 +7,10 @@ import re
 import string
 from sys import stdout
 
-def create_embedding_sentence(sentence, glove_dict, unk_vector,  word2idx, onehot=False, maxlen=45):
-
+def create_embedding_sentence(sentence, glove_dict, unk_vector,  word2idx, onehot=False, maxlen=45, random_vector= False):
+    """
+    returns either a list of the word index or a np.matrix with the word embeddings depending on onehot
+    """
     vectorized_sentence = []
     regex = re.compile('[%s]' % re.escape(string.punctuation))
     sentence = regex.sub('', sentence).lower()
@@ -36,6 +38,9 @@ def create_embedding_sentence(sentence, glove_dict, unk_vector,  word2idx, oneho
         #print idx_sentence
         return idx_sentence
     else:
+        if random_vector and maxlen==1:
+                return .1 * np.random.random_sample((300,)) - 0.05
+
         for token in tokenized_sentence:
             try:
                 if token in glove_dict:
