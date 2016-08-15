@@ -104,17 +104,17 @@ class paper_model():
         # 2 embedding layers 1 per premise 1 per hypothesis
         premise_model.add(Embedding(output_dim=300, input_dim=n_symbols + 1, mask_zero=True, weights=[emb_init]))
         premise_model.add(Dropout(0.1))
-        premise_model.add(self.RNN(200, return_sequences=False)) #best perf is 300
+        premise_model.add(self.RNN(100, return_sequences=False)) #best perf is 300
         premise_model.add(Dropout(0.1))
 
         hypothesis_model.add(Embedding(output_dim=300, input_dim=n_symbols + 1, mask_zero=True, weights=[emb_init]))
-        premise_model.add(Dropout(0.1))
-        hypothesis_model.add(self.RNN(200, return_sequences=False)) #best perf is 300
-        premise_model.add(Dropout(0.1))
+        hypothesis_model.add(Dropout(0.1))
+        hypothesis_model.add(self.RNN(100, return_sequences=False)) #best perf is 300
+        hypothesis_model.add(Dropout(0.1))
 
         print('Concat premise + hypothesis...')
         self.nli_model = Sequential()
-        self.nli_model.add(Merge([premise_model, hypothesis_model], mode='mul', concat_axis=1))#concat irrelevant if mult
+        self.nli_model.add(Merge([premise_model, hypothesis_model], mode='concat', concat_axis=1))#concat irrelevant if mult
         self.nli_model.add(Dense(input_dim=200, output_dim=200, init='normal', activation='tanh')) #input 600 output 200d
         for i in range(1, self.stacked_layers-1):
             print ('stacking %d layer')%i
@@ -124,7 +124,7 @@ class paper_model():
         self.nli_model.add(Dense(input_dim=200, output_dim=2, init='normal', activation='tanh')) #200d
         print ('Softmax layer...')
         # 3 way softmax (entail, neutral, contradiction)
-        self.nli_model.add(Dense(2, init='uniform'))
+        self.nli_model.add(Dense(3, init='uniform'))
         self.nli_model.add(Activation('softmax')) # care! 3way softmax!
 
         print('Compiling model...')
@@ -173,6 +173,8 @@ class paper_model():
         # I dont want the conversion here, make the conversion somewhere else, for esthetic purpouses
         print('training....')
         history = self.nli_model.fit(X, expected_output, batch_size=64, nb_epoch=1, verbose=1, sample_weight=None, show_accuracy=True)
+        #print self.nli_model.layers[0].get_output(train=True)[0].eval({self.nli_model.layers[0].input[0]: X[0].astype(np.int32)})
+        #print self.nli_model.layers[2].get_inputs(train=True)[0].eval({self.nli_model.layers[0].input[0]: X[0].astype(np.int32)})
         if batch_range == 540000:
             lines = self.file_len("lossfile.txt")
             loss_file = open("lossfile.txt", "a")
