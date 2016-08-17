@@ -178,10 +178,10 @@ def make_unicode(source_text):
     return no_unicode
 
 def label_output_data(label):
-    labels = {#'neutral':np.array([0,1,0]),
-                'entailment':np.array([1,0]),
-                'contradiction':np.array([0,1]),
-                ' ': np.array([0,0])
+    labels = {'neutral':np.array([0,1,0]),
+                'entailment':np.array([1,0,0]),
+                'contradiction':np.array([0,0,1]),
+                ' ': np.array([0,0,0])
                 }
     return labels[label]
 

@@ -102,6 +102,9 @@ class paper_model():
         premise_model = Sequential()
         hypothesis_model = Sequential()
         # 2 embedding layers 1 per premise 1 per hypothesis
+        #shared_emb_layer = Embedding(output_dim=300, input_dim=n_symbols + 1, mask_zero=True, weights=[emb_init])
+
+
         premise_model.add(Embedding(output_dim=300, input_dim=n_symbols + 1, mask_zero=True, weights=[emb_init]))
         premise_model.add(Dropout(0.1))
         premise_model.add(self.RNN(100, return_sequences=False)) #best perf is 300
@@ -114,14 +117,14 @@ class paper_model():
 
         print('Concat premise + hypothesis...')
         self.nli_model = Sequential()
-        self.nli_model.add(Merge([premise_model, hypothesis_model], mode='concat', concat_axis=1))#concat irrelevant if mult
-        self.nli_model.add(Dense(input_dim=200, output_dim=200, init='normal', activation='tanh')) #input 600 output 200d
+        self.nli_model.add(Merge([premise_model, hypothesis_model], mode='mul', concat_axis=1))#concat irrelevant if mult
+        self.nli_model.add(Dense(input_dim=100, output_dim=200, init='normal', activation='tanh')) #input 600 output 200d
         for i in range(1, self.stacked_layers-1):
             print ('stacking %d layer')%i
             self.nli_model.add(Dense(input_dim=200, output_dim=200, init='normal', activation='tanh')) #200d
 
         print ('stacking last layer')
-        self.nli_model.add(Dense(input_dim=200, output_dim=2, init='normal', activation='tanh')) #200d
+        self.nli_model.add(Dense(input_dim=200, output_dim=3, init='normal', activation='tanh')) #200d
         print ('Softmax layer...')
         # 3 way softmax (entail, neutral, contradiction)
         self.nli_model.add(Dense(3, init='uniform'))

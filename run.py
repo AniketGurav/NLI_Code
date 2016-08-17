@@ -18,7 +18,7 @@ import string
 #create a ds with only 4k pairs or both train and test...
 # no need shitty_pc just fixate cut_ds to 1
 cut_ds = 10000
-LOAD_W = True
+LOAD_W = False
 
 train_model = True
 is_tbir_test = False
@@ -37,7 +37,7 @@ is_tbir_test = False
 
 snli_model = paper_model(3, is_tbir=is_tbir_test)#stacked layers
 
-remove_neutral = True
+remove_neutral = False
 if train_model:
     df_data, max_pre, max_hypo = read_json_file(train=True, remove_neutral = remove_neutral)
     vocabulary = give_vocabulary(df_data)

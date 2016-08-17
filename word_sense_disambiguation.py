@@ -67,7 +67,7 @@ def build_matrix_to_tsne(glove_dict, tokens):
 words = []
 if len(sys.argv)<2:
     print 'Words not specified'
-    words = ["plant", "factory", "machine", "houseplant", "cake"]
+    words = ["looking at", "looking threw"]
 else:
     for i in range(1, len(sys.argv)):
         words.append(sys.argv[i])
@@ -82,10 +82,11 @@ to_plot = []
 labels = []
 not_found = 0
 len_words = len(words)
+clusters_sz = 1000
 for word in words:
     try:
         cosine_matrix = check_similarity(glove_matrix, glove_dict[word])
-        ind = cosine_matrix[0].argsort()[-100:][::-1]
+        ind = cosine_matrix[0].argsort()[-clusters_sz:][::-1]
         closest = ind.tolist()
         tokens = [idx2word[idx] for idx in closest]
         to_reduce = build_matrix_to_tsne(glove_dict, tokens)
@@ -103,12 +104,12 @@ X_hdim = np.array(to_plot)
 #print X_hdim
 print X_hdim.shape
 X = model.fit_transform(X_hdim)
-num_words_print = 1
-X_x = np.zeros((len_words*5, 2))
+num_words_print = 5
+X_x = np.zeros((len_words*num_words_print, 2))
 labels_x = []
 print X.shape
 k=0
-ranges = [x*100 for x in range (0, len_words)]
+ranges = [x*clusters_sz for x in range (0, len_words)]
 print ranges
 for i in ranges:
     for j in range(1, num_words_print+1):
