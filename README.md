@@ -1,6 +1,8 @@
 # NLI_Code
 Code for my thesis about natural language inference
 
+Some fancy explanation will appear here at a later date. 
+
 
 (c) Copyright KU Leuven
 Without written permission of the thesis supervisor and the author it is forbidden
